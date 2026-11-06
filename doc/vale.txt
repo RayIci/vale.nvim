@@ -1,0 +1,87 @@
+*vale.txt*    A theme engine and a browser studio for designing themes
+
+                                                               *vale*
+
+A vale theme is plain data: palettes of named colours and a mapping from
+semantic roles to those colours. Each variant loads as a colorscheme that
+covers the editor, syntax, treesitter, LSP, terminals, the statusline and
+many plugins. The plugin ships the theme `vale` (`vale-night`, `vale-day`).
+|:Vale| opens a studio in the browser to create and edit themes.
+
+==============================================================================
+CONTENTS                                                   *vale-contents*
+
+    1. Setup ............................. |vale-setup|
+    2. Themes ............................ |vale-themes|
+    3. Studio ............................ |vale-studio|
+    4. Lua API ........................... |vale-api|
+
+==============================================================================
+1. SETUP                                                      *vale-setup*
+
+>lua
+    require("vale").setup({
+      themes_dir = vim.fn.stdpath("config") .. "/themes",
+      output_dir = vim.fn.stdpath("config"),
+    })
+    require("vale.studio").setup()
+    vim.cmd.colorscheme("vale-night")
+<
+`themes_dir`   (default `stdpath("config")/themes`)
+    Your themes. Created and edited themes are written here.
+
+`output_dir`   (default `stdpath("config")`)
+    Where the studio writes `colors/<name>-<variant>.lua` and
+    `lua/lualine/themes/<name>-<variant>.lua` loaders. It must be on
+    'runtimepath' for new colorschemes to be found.
+
+==============================================================================
+2. THEMES                                                    *vale-themes*
+
+A theme is a directory `<name>/` with `night.lua` and/or `day.lua` (pure
+data: `base`, `accent`, `signal`, `ansi` and `ui` blocks, one
+`key = "#RRGGBB"` per line) and an optional `semantics.lua` that re-points
+roles for all variants or inside `night = {}` / `day = {}`.
+
+Themes are looked up in `themes_dir` first, then among the bundled themes.
+Bundled themes are read-only: saving one in the studio first copies it into
+`themes_dir`. Delete the copy to return to the bundled theme.
+
+Every theme defines `FolderIcon`, so theme-agnostic configuration can pick
+up the folder colour.
+
+==============================================================================
+3. STUDIO                                                    *vale-studio*
+
+                                                                     *:Vale*
+:Vale               Open the theme list in the browser.
+:Vale new {name}    Open the new-theme form: variants, and a start from the
+                    VS Code Modern reference or a copy of any theme.
+:Vale edit {name}   Edit every palette slot and semantic role, previewed
+                    live in the page and in Neovim.
+:Vale stop          Stop the studio.
+
+The studio is an HTTP server inside Neovim on `127.0.0.1` with a per-session
+token; it stops when no page has been connected for 30 seconds. Nothing is
+written until you save; closing the page discards unsaved edits. Saving
+rewrites only the lines of changed slots and refuses palette files that
+have unsaved changes in a buffer.
+
+==============================================================================
+4. LUA API                                                      *vale-api*
+
+`require("vale")`
+    `setup(opts)`             see |vale-setup|
+    `load(name, variant)`     load `<name>-<variant>`
+    `list()`                  themes with variants (`bundled` flag)
+    `colorschemes()`          every `<name>-<variant>`, each once
+    `themes_dir()`            the user's themes directory
+    `bundled_dir()`           the bundled themes
+    `theme_path(name, file?)` resolved theme directory or file
+    `is_bundled(name)`        no user copy shadows the bundled theme
+    `copy_to_user(name)`      copy a bundled theme into `themes_dir`
+
+`require("vale.studio")`
+    `setup()`, `open()`, `stop()`, `url()`, `discard()`
+
+ vim:tw=78:ts=8:ft=help:norl:
