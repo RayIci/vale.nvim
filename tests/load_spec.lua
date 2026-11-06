@@ -1,0 +1,12 @@
+local H = require("helpers")
+
+describe("bundled theme", function()
+  it("loads vale-night and vale-day", function()
+    vim.cmd.colorscheme("vale-night")
+    eq("vale-night", vim.g.colors_name)
+    eq("dark", vim.o.background)
+    vim.cmd.colorscheme("vale-day")
+    eq("vale-day", vim.g.colors_name)
+    eq("light", vim.o.background)
+  end)
+end)
