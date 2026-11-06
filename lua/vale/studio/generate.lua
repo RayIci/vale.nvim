@@ -1,6 +1,7 @@
----Creates themes: palette files (from the VS Code reference via the palette
----template, or copied from an existing theme) plus the one-line colorscheme
----and lualine shims for each variant.
+---Creates themes in the user's themes directory: palette files (from the VS
+---Code reference via the palette template, or copied from an existing theme,
+---bundled ones included) plus the one-line colorscheme and lualine shims for
+---each variant, written under the configured output directory.
 local vale = require("vale")
 local writer = require("vale.studio.writer")
 
@@ -56,7 +57,7 @@ end
 ---@param name string
 ---@param variant ValeVariant
 local function write_shims(name, variant)
-  local config = vim.fn.stdpath("config") --[[@as string]]
+  local config = vale.options.output_dir
   local colorscheme = name .. "-" .. variant
   vim.fn.mkdir(vim.fs.joinpath(config, "colors"), "p")
   vim.fn.mkdir(vim.fs.joinpath(config, "lua", "lualine", "themes"), "p")

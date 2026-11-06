@@ -320,9 +320,15 @@ local function handle(req, res)
       return res.json(409, { error = "no editing session for this theme" })
     end
     s.quiet_until = vim.uv.hrtime() + 1e9
+    local bundled = vale.is_bundled(s.name)
     local ok, err = require("vale.studio.writer").save(s.name, s.palette, s.semantics)
     if not ok then
       return res.json(409, { error = err })
+    end
+    if bundled then
+      -- the theme now lives in the user's copy: watch that one instead
+      stop_watch(s)
+      watch(s, s.name)
     end
     s.palette = { night = {}, day = {} }
     s.semantics = vale.read_semantics(s.name)

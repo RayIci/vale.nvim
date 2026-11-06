@@ -1,6 +1,7 @@
----vale: theme engine. A theme is `themes/<name>/` in the config directory
----(night.lua and/or day.lua pure-data palettes, optional semantics.lua); each
----variant loads as the colorscheme `<name>-<variant>`.
+---vale: theme engine. A theme is a directory `<name>/` (night.lua and/or
+---day.lua pure-data palettes, optional semantics.lua) in the user's themes
+---directory or among the themes bundled with the plugin; each variant loads as
+---the colorscheme `<name>-<variant>`.
 ---Layers: palette (pure data) → semantics (role → palette name: shared
 ---default, then theme, then variant overrides) → groups/* and integrations/*.
 ---@class Vale
@@ -48,17 +49,86 @@ M.modules = {
   "vale.integrations",
 }
 
----Directory holding every theme (user data, outside the plugin code).
+---Repository root of the plugin (holds the bundled themes/).
+local root = vim.fs.dirname(vim.fs.dirname(vim.fs.dirname(debug.getinfo(1, "S").source:sub(2))))
+
+---@class ValeOpts
+---@field themes_dir string the user's themes (created and edited themes live here)
+---@field output_dir string where the studio writes colors/ and lua/lualine/themes/ loaders
+
+---@return ValeOpts
+local function defaults()
+  local config = vim.fn.stdpath("config") --[[@as string]]
+  return { themes_dir = vim.fs.joinpath(config, "themes"), output_dir = config }
+end
+
+---@type ValeOpts
+M.options = defaults()
+
+---@param opts? ValeOpts|{}
+function M.setup(opts)
+  M.options = vim.tbl_extend("force", defaults(), opts or {})
+end
+
+---The user's themes directory (where new and edited themes are written).
 ---@return string
 function M.themes_dir()
-  return vim.fs.joinpath(vim.fn.stdpath("config") --[[@as string]], "themes")
+  return M.options.themes_dir
+end
+
+---Themes shipped with the plugin. Read-only: editing one copies it into the
+---user's themes directory first.
+---@return string
+function M.bundled_dir()
+  return vim.fs.joinpath(root, "themes")
+end
+
+---Directory of a theme: the user's copy when there is one, else the bundled
+---theme, else where a new user theme would go.
+---@param name string
+---@return string
+function M.theme_dir(name)
+  local user = vim.fs.joinpath(M.themes_dir(), name)
+  if vim.uv.fs_stat(user) then
+    return user
+  end
+  local bundled = vim.fs.joinpath(M.bundled_dir(), name)
+  if vim.uv.fs_stat(bundled) then
+    return bundled
+  end
+  return user
+end
+
+---Whether `name` resolves to the bundled copy (no user copy shadows it).
+---@param name string
+---@return boolean
+function M.is_bundled(name)
+  return vim.uv.fs_stat(vim.fs.joinpath(M.themes_dir(), name)) == nil
+    and vim.uv.fs_stat(vim.fs.joinpath(M.bundled_dir(), name)) ~= nil
+end
+
+---Copy a bundled theme into the user's themes directory, so it can be edited
+---without touching the plugin's install directory. The bundled colorscheme
+---loaders already resolve the user copy first.
+---@param name string
+---@return string dir the user copy
+function M.copy_to_user(name)
+  local from = vim.fs.joinpath(M.bundled_dir(), name)
+  local to = vim.fs.joinpath(M.themes_dir(), name)
+  vim.fn.mkdir(to, "p")
+  for file, kind in vim.fs.dir(from) do
+    if kind == "file" then
+      vim.fn.writefile(vim.fn.readfile(vim.fs.joinpath(from, file), "b"), vim.fs.joinpath(to, file), "b")
+    end
+  end
+  return to
 end
 
 ---@param name string
 ---@param file? string file inside the theme directory
 ---@return string
 function M.theme_path(name, file)
-  local dir = vim.fs.joinpath(M.themes_dir(), name)
+  local dir = M.theme_dir(name)
   return file and vim.fs.joinpath(dir, file) or dir
 end
 
@@ -85,23 +155,42 @@ function M.read_semantics(name)
   return vim.uv.fs_stat(path) and dofile(path) or {}
 end
 
----Every theme on disk with the variants it has, sorted by name.
----@return { name: string, variants: ValeVariant[] }[]
+---Every theme with the variants it has, sorted by name: the user's themes
+---and the bundled ones (a user copy of a bundled theme is listed once).
+---@return { name: string, variants: ValeVariant[], bundled: boolean }[]
 function M.list()
-  local out = {}
-  for name, kind in vim.fs.dir(M.themes_dir()) do
-    if kind == "directory" then
-      local variants = vim.tbl_filter(function(v)
-        return vim.uv.fs_stat(M.palette_path(name, v)) ~= nil
-      end, M.variants)
-      if #variants > 0 then
-        out[#out + 1] = { name = name, variants = variants }
+  local out, seen = {}, {}
+  for _, dir in ipairs({ M.themes_dir(), M.bundled_dir() }) do
+    if vim.uv.fs_stat(dir) then
+      for name, kind in vim.fs.dir(dir) do
+        if kind == "directory" and not seen[name] then
+          seen[name] = true
+          local variants = vim.tbl_filter(function(v)
+            return vim.uv.fs_stat(M.palette_path(name, v)) ~= nil
+          end, M.variants)
+          if #variants > 0 then
+            out[#out + 1] = { name = name, variants = variants, bundled = M.is_bundled(name) }
+          end
+        end
       end
     end
   end
   table.sort(out, function(a, b)
     return a.name < b.name
   end)
+  return out
+end
+
+---Every vale colorscheme (`<name>-<variant>`), sorted.
+---@return string[]
+function M.colorschemes()
+  local out = {}
+  for _, theme in ipairs(M.list()) do
+    for _, variant in ipairs(theme.variants) do
+      out[#out + 1] = theme.name .. "-" .. variant
+    end
+  end
+  table.sort(out)
   return out
 end
 

@@ -115,6 +115,11 @@ end
 ---@param semantics? table file-shaped semantics (nil: leave semantics.lua alone)
 ---@return boolean ok, string? err
 function M.save(name, palette, semantics)
+  -- Bundled themes are read-only: the first save copies the theme into the
+  -- user's themes directory, and every path below then resolves to the copy.
+  if vale.is_bundled(name) then
+    vale.copy_to_user(name)
+  end
   local writes = {} ---@type { path: string, lines: string[]|nil }[]
   for variant, edits in pairs(palette or {}) do
     if not vim.tbl_isempty(edits) then
